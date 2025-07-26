@@ -24,49 +24,63 @@ function extractRecipeFromMarkdown(text) {
 }
 
 async function generateRecipe(req, res) {
-  const { imageTags, voiceText, manualText, query, photoUrl, mode, servings } = req.body;
+  const {
+    imageTags = [],
+    voiceText = '',
+    manualText = '',
+    query = '',
+    mode = '',
+    servings = ''
+  } = req.body || {};
+
+  // Log everything for sanity
+  console.log('[Melissa] 🔍 Incoming body:', req.body);
+  console.log('[Melissa] 📂 Incoming files:', req.files);
+  console.log(`[Melissa] 🍳 Mode selected: ${mode}`);
 
   if (!mode) {
     return res.status(400).json({ error: 'Missing input mode (image-only, voice-only, fusion, or text-only)' });
   }
 
-  console.log(`[Melissa] 🍳 Mode selected: ${mode}`);
-
-  const prompt = formatPrompt(imageTags || [], voiceText || manualText || query || '', mode, servings);
+  const prompt = formatPrompt(imageTags, voiceText || manualText || query || '', mode, servings);
   console.log('[Melissa] 🧠 Formatted Prompt:\n', prompt);
 
   let input;
+
   if (mode === 'image-only' || mode === 'fusion') {
-    if (!photoUrl) {
-      return res.status(400).json({ error: 'Photo URL is required for image-based modes.' });
+    const image1 = req.files?.image1?.[0];
+    if (!image1 || !image1.buffer) {
+      console.error('[Melissa] 🖼 No image1 buffer found');
+      return res.status(400).json({ error: 'Missing Image: image1 not uploaded correctly.' });
     }
-    const imageBuffer = await fetch(photoUrl).then(r => r.arrayBuffer());
+
+    console.log(`[Melissa] 🖼 image1 received: ${image1.originalname}, ${image1.size} bytes`);
+
     const imagePart = {
       inlineData: {
-        data: Buffer.from(imageBuffer).toString('base64'),
-        mimeType: 'image/jpeg',
+        data: image1.buffer.toString('base64'),
+        mimeType: image1.mimetype || 'image/jpeg',
       },
     };
+
     input = [{ text: prompt }, imagePart];
   } else {
     input = prompt;
   }
 
-  let responseText;
-
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' }); //gemma-3-27b-it, gemini-2.5-pro
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
     const result = await model.generateContent(input);
-    responseText = result.response.text().replace(/```json|```/g, '').trim();
+    const responseText = result.response.text().replace(/```json|```/g, '').trim();
 
-    const recipe = safeParse(responseText) || extractRecipeFromMarkdown(responseText);
-    if (!recipe) throw new Error('Gemini returned invalid JSON');
+    const recipe = safeParse(responseText, 'Gemini') || extractRecipeFromMarkdown(responseText);
+    if (!recipe) throw new Error('Gemini returned invalid recipe format');
 
     console.log('[Melissa] ✅ Gemini recipe:', recipe);
     return res.json(recipe);
   } catch (err) {
     const errMsg = err?.message?.toLowerCase?.() || '';
-    const isQuota = errMsg === 'gemini quota error';
+    const isQuota = errMsg.includes('quota');
 
     console.warn('⚠️ Gemini failed:', err.message);
     if (isQuota) {
@@ -86,10 +100,10 @@ async function generateRecipe(req, res) {
       }
 
       console.log('[Melissa] 🔄 Fallback recipe:', fallbackRecipe);
-      res.json(fallbackRecipe);
+      return res.json(fallbackRecipe);
     } catch (fallbackErr) {
       console.error('❌ Fallback parse failed:', fallbackErr.message);
-      res.status(500).json({ error: 'Fallback API parse failed unexpectedly.' });
+      return res.status(500).json({ error: 'Fallback API parse failed unexpectedly.' });
     }
   }
 }
