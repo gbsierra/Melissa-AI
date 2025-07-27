@@ -9,28 +9,32 @@
  * @param {string | number} [servings] // Optional servings input
  * @returns {string}
  */
-function formatPrompt(imageTags, query, mode, servings) {
-  const servingsLine = servings ? ` They want approximately ${servings} servings.` : '';
+function formatPrompt(imageTags, query, mode, servings, difficulty, cookware) {
+  const servingsLine = servings ? ` Approximately ${servings} servings.` : '';
+  const difficultyLine = difficulty ? ` Desired difficulty is "${difficulty}".` : '';
+  const cookwareLine = cookware ? ` Must use: ${cookware}.` : '';
 
   const formatHint = ` Respond strictly with a JSON object like:
-{
-  "title": "Dish Name",
-  "ingredients": [
-    { "group": "Group Name", "items": ["ingredient 1", "ingredient 2"] }
-  ],
-  "steps": ["Step 1", "Step 2", "Step 3"]
-}
-Return *only* the JSON. No markdown, no commentary, no explanation.`;
+    {
+      "title": "Dish Name",
+      "ingredients": [
+        { "group": "Group Name", 
+         "items": ["ingredient 1", "ingredient 2"] 
+        }
+      ],
+      "steps": ["Step 1", "Step 2", "Step 3"]
+    }
+    Return *only* the JSON. No markdown, no commentary, no explanation.`;
 
   switch (mode) {
     case 'image-only':
-      return `Based only on these visual ingredient tags: ${imageTags.join(', ')}, generate a suitable recipe.${servingsLine}${formatHint}`;
+      return `Input modality: visual tags. Tags detected: ${imageTags.join(', ')}. Task: generate a recipe.${servingsLine}${difficultyLine}${cookwareLine}${formatHint}`;
     case 'voice-only':
-      return `The user said: "${query}". Generate a recipe based on this spoken input.${servingsLine}${formatHint}`;
+      return `Input modality: voice transcript. Transcript received: "${query}". Task: generate a recipe.${servingsLine}${difficultyLine}${cookwareLine}${formatHint}`;
     case 'fusion':
-      return `The user provided a photo containing: ${imageTags.join(', ')} and also said: "${query}". Combine both sources of input to generate a personalized recipe.${servingsLine}${formatHint}`;
+      return `Input modality: fusion. Tags detected: ${imageTags.join(', ')}. Transcript received: "${query}". Task: generate a recipe that integrates both inputs.${servingsLine}${difficultyLine}${cookwareLine}${formatHint}`;
     case 'text-only':
-      return `A user submitted this full recipe request: "${query}". Generate a recipe that best fulfills their request.${servingsLine}${formatHint}`;
+      return `Input modality: textual request. User input: "${query}". Task: generate a recipe.${servingsLine}${difficultyLine}${cookwareLine}${formatHint}`;
     default:
       throw new Error(`Invalid mode: ${mode}`);
   }

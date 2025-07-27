@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   TextInput,
@@ -9,172 +9,85 @@ import {
   Image,
   ActivityIndicator,
   Modal,
-  Button,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import Animated from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as ImagePicker from 'expo-image-picker';
+import { SwipeListView } from 'react-native-swipe-list-view';
+import { FadeIn, FadeOut } from 'react-native-reanimated';
+
 import { FontAwesome } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
+
 import Mic from '../components/Mic';
+import { HelloWave } from '../components/HelloWave';
+
+import { useSavedRecipes } from '../hooks/useSavedRecipes';
+import { useRetryCooldown } from '../hooks/useRetryCooldown';
+import { useRecipeGenerator } from '../hooks/useRecipeGenerator';
+import { usePhotoManager } from '../hooks/usePhotoManager';
 
 export default function HomeScreen() {
   const router = useRouter();
+
+  // Recipe Generation user inputs
   const [query, setQuery] = useState('');
   const [servings, setServings] = useState('');
-  const [photoUris, setPhotoUris] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [retryCooldown, setRetryCooldown] = useState<number | null>(null);
-  const [quotaMessage, setQuotaMessage] = useState<string | null>(null);
-  const [savedRecipes, setSavedRecipes] = useState<Recipe[]>([]);
-  const [micVisible, setMicVisible] = useState(false);
+  const [difficulty, setDifficulty] = useState('');
+  const [cookware, setCookware] = useState('');
 
+  const [loading, setLoading] = useState(false); // loading?
+  const [retryCooldown, setRetryCooldown] = useState<number | null>(null); 
+  const [quotaMessage, setQuotaMessage] = useState<string | null>(null); 
+  const [micVisible, setMicVisible] = useState(false); // mic modal visable?
+
+  const { savedRecipes, loadSavedRecipes, deleteRecipe } = useSavedRecipes();
+
+  // Load recipes from AsyncStorage on page enter
   useEffect(() => {
-    const loadSavedRecipes = async () => {
-      try {
-        const stored = await AsyncStorage.getItem('savedRecipes');
-        const parsed: Recipe[] = stored ? JSON.parse(stored) : [];
-        setSavedRecipes(parsed);
-      } catch (err) {
-        console.error('❌ Failed to load saved recipes:', err);
-      }
-    };
     loadSavedRecipes();
   }, []);
 
-  useEffect(() => {
-    if (retryCooldown === null) return;
-    const timer = setInterval(() => {
-      setRetryCooldown(prev => {
-        if (prev && prev > 1) return prev - 1;
-        setQuotaMessage(null);
-        return null;
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [retryCooldown]);
+  // Starts cooldown timer if 'retryCooldown' is active
+  useRetryCooldown(retryCooldown, setRetryCooldown, setQuotaMessage);
+  
+  // Manages photo selection and deletion
+  const {
+    photoUris,
+    pickCameraPhoto,
+    removePhoto,
+  } = usePhotoManager(2); // 2 is max photo limit
 
-  const handleGenerate = async () => {
-    if (retryCooldown) return;
+  // Generates recipe based on user input 
+  const { handleGenerate } = useRecipeGenerator(
+    query,
+    servings === '' ? null : parseInt(servings, 10),
+    difficulty,
+    cookware,
+    photoUris,
+    setRetryCooldown,
+    setQuotaMessage,
+    setLoading
+  );
 
-    setLoading(true);
-    try {
-      const formData = new FormData();
-
-      // Append basic fields
-      formData.append('query', query);
-      formData.append('servings', servings.toString());
-
-      // Safely determine mode and guarantee it’s a string
-      const mode = determineMode(query, photoUris.length > 0 ? 'has-images' : '');
-      formData.append('mode', mode);
-
-      // Append image files (0–2 supported)
-      photoUris
-        .filter(uri => typeof uri === 'string' && uri.startsWith('file://'))
-        .forEach((uri, index) => {
-          formData.append(`image${index + 1}`, {
-            uri,
-            type: 'image/jpeg',
-            name: `ingredient_${index + 1}.jpg`,
-          } as unknown as Blob); // 👈 TypeScript fix for React Native FormData
-        });
-
-      // Send to backend
-      const response = await fetch('http://10.0.0.23:3001/api/recipes/generate-recipe', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const text = await response.text();
-        const match = text.match(/retryDelay"\s*:\s*"(\d+)s"/);
-        if (match) {
-          const seconds = parseInt(match[1]);
-          const minutes = Math.ceil(seconds / 60);
-          setRetryCooldown(seconds);
-          const message =
-            seconds < 60
-              ? `⚠️ Melissa is busy. Please wait ${seconds} seconds.`
-              : `⚠️ Melissa is busy. Please wait about ${minutes} minutes.`;
-          setQuotaMessage(message);
-          return;
-        }
-
-        if (text.toLowerCase().includes('quota')) {
-          setRetryCooldown(60);
-          setQuotaMessage('⚠️ Gemini quota exceeded. Please wait a minute.');
-          return;
-        }
-
-        throw new Error(`Gemini failed: ${text}`);
-      }
-
-      // Handle recipe response
-      const recipe = await response.json();
-      router.push({
-        pathname: '/recipe',
-        params: {
-          dishName: recipe.title,
-          ingredients: JSON.stringify(recipe.ingredients),
-          instructions: JSON.stringify(recipe.steps),
-          servings,
-          text: query,
-          photos: JSON.stringify(photoUris),
-        },
-      });
-    } catch (error) {
-      console.error('Error in handleGenerate:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-function determineMode(text: string, imageFlag: string): 'fusion' | 'image-only' | 'text-only' {
-  if (text && imageFlag) return 'fusion';
-  if (imageFlag) return 'image-only';
-  if (text) return 'text-only';
-  return 'text-only';
-}
-
-  const handlePickImage = async () => {
-    if (photoUris.length >= 2) {
-      alert('Maximum of 2 photos allowed.');
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
-    if (!result.canceled) {
-      setPhotoUris(prev => [...prev, result.assets[0].uri]);
-    }
-  };
-
-  const handleDeletePhoto = (index: number) => {
-    setPhotoUris(prev => prev.filter((_, i) => i !== index));
-  };
-
-  // Callback when Mic finishes and returns transcript
+  // Func for when Mic finishes and returns transcript
   const onMicTranscript = (text: string) => {
-    setMicVisible(false);
+    setMicVisible(false); // hides mic modal
     if (text && text.trim() !== '') {
-      setQuery(text);
+      setQuery(text); // update query with spoken input
     }
   };
 
   const isDisabled = (!query && photoUris.length === 0) || loading || !!retryCooldown;
   const buttonStyle = [styles.button, isDisabled ? { opacity: 0.5 } : null];
 
-  type Recipe = {
-    dishName?: string;
-    ingredients?: string[];
-    instructions?: string[];
-    servings?: number;
-    prompt?: string | null;
-    photo?: string | null;
-  };
-
-  return (
+ return (
+  <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
     <SafeAreaView style={styles.safe}>
-      <View style={styles.container}>
+        <HelloWave />
+
         {/* Hero Section */}
         <View style={styles.hero}>
           <Text style={styles.logo}>👨‍🍳 Melissa</Text>
@@ -183,6 +96,7 @@ function determineMode(text: string, imageFlag: string): 'fusion' | 'image-only'
 
         {/* Input Section */}
         <View style={styles.inputCard}>
+          {/* Top Input Row */}
           <View style={styles.inputWrapper}>
             <TextInput
               style={styles.input}
@@ -194,7 +108,6 @@ function determineMode(text: string, imageFlag: string): 'fusion' | 'image-only'
               }}
               placeholderTextColor="#aaa"
             />
-            {/* Mic button triggers modal */}
             <TouchableOpacity
               style={styles.micButton}
               onPress={() => setMicVisible(true)}
@@ -203,32 +116,70 @@ function determineMode(text: string, imageFlag: string): 'fusion' | 'image-only'
             </TouchableOpacity>
           </View>
 
-          <View style={styles.servingsWrapper}>
+          {/* Servings & Difficulty Row */}
+          <View style={styles.sideBySideRow}>
+            <View style={styles.halfInput}>
+              <TextInput
+                style={styles.servingsInput}
+                placeholder="Servings?"
+                value={servings}
+                onChangeText={setServings}
+                keyboardType="numeric"
+                placeholderTextColor="#aaa"
+              />
+            </View>
+            <View style={styles.halfInput}>
+              <TextInput
+                style={styles.input}
+                placeholder="Difficulty (e.g. easy)"
+                value={difficulty}
+                onChangeText={setDifficulty}
+                placeholderTextColor="#aaa"
+              />
+            </View>
+          </View>
+
+          {/* Cookware Input */}
+          <View style={styles.inputWrapper}>
             <TextInput
-              style={styles.servingsInput}
-              placeholder="How many servings?"
-              value={servings}
-              onChangeText={setServings}
-              keyboardType="numeric"
+              style={styles.input}
+              placeholder="Specified cookware (e.g. pan, wok, grill...)"
+              value={cookware}
+              onChangeText={setCookware}
               placeholderTextColor="#aaa"
             />
           </View>
+
+          {/* Loading Spinner */}
+          {loading && (
+            <View style={styles.loadingOverlay}>
+              <Animated.View
+                entering={FadeIn}
+                exiting={FadeOut}
+                style={styles.loadingOverlay}
+              >
+                <ActivityIndicator size="large" color="#fff" />
+                <Text style={styles.spinnerText}>Generating your recipe...</Text>
+              </Animated.View>
+            </View>
+          )}
+
         </View>
 
         {/* Photo Upload Button */}
-        <TouchableOpacity style={styles.photoButton} onPress={handlePickImage}>
+        <TouchableOpacity style={styles.photoButton} onPress={pickCameraPhoto}>
           <Text style={styles.photoText}>📸 Add Ingredient Image</Text>
         </TouchableOpacity>
 
-        {/* Display photos with delete button */}
+        {/* Display Ingredient Photos */}
         {photoUris.length > 0 && (
           <View style={styles.photoContainer}>
             {photoUris.map((uri, index) => (
-              <View key={index} style={styles.photoWrapper}>
+              <View key={uri} style={styles.photoWrapper}>
                 <Image source={{ uri }} style={styles.photoThumbnail} />
                 <TouchableOpacity
                   style={styles.deleteButton}
-                  onPress={() => handleDeletePhoto(index)}
+                  onPress={() => removePhoto(index)}
                 >
                   <Text style={styles.deleteButtonText}>×</Text>
                 </TouchableOpacity>
@@ -237,88 +188,133 @@ function determineMode(text: string, imageFlag: string): 'fusion' | 'image-only'
           </View>
         )}
 
-        {/* Generate Button */}
+        {/* Generate Button with Haptic */}
         <Pressable
           style={buttonStyle}
           disabled={isDisabled}
-          onPress={handleGenerate}
+          onPress={() => {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            handleGenerate();
+          }}
         >
           <Text style={styles.buttonText}>🍳 Generate Recipe</Text>
         </Pressable>
 
-        {/* Loading Spinner */}
-        {loading && (
-          <View style={styles.spinnerWrapper}>
-            <ActivityIndicator size="large" color="#FF6347" />
-            <Text style={styles.spinnerText}>Generating your recipe...</Text>
-          </View>
-        )}
         {/* Retry/Quota Cooldown Message */}
         {quotaMessage && (
           <Text style={styles.busyMessage}>{quotaMessage}</Text>
         )}
 
-        {/* Saved Recipes */}
+        {/* Saved Recipes with Swipe & Animation */}
         {savedRecipes.length > 0 && (
           <View style={{ marginTop: 30 }}>
             <Text style={{ fontSize: 18, fontWeight: '600', marginBottom: 10 }}>
               📁 Saved Recipes
             </Text>
-
-            {savedRecipes.map((recipe: Recipe, index: number) => (
-              <TouchableOpacity
-                key={index}
-                style={{
-                  marginBottom: 12,
-                  padding: 12,
-                  backgroundColor: '#fff',
-                  borderRadius: 10,
-                  borderWidth: 1,
-                  borderColor: '#eee',
-                }}
-                onPress={() =>
-                  router.push({
-                    pathname: '/recipe',
-                    params: {
-                      dishName: recipe.dishName ?? '',
-                      ingredients: JSON.stringify(recipe.ingredients ?? []),
-                      instructions: JSON.stringify(recipe.instructions ?? []),
-                      servings: String(recipe.servings ?? ''),
-                      text: recipe.prompt ?? '',
-                      photo: recipe.photo ?? '',
-                    },
-                  })
-                }
-              >
-                <Text style={{ fontSize: 16, fontWeight: '600', color: '#FF6347' }}>
-                  {recipe.dishName || 'Untitled Dish'}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            <SwipeListView
+              data={savedRecipes}
+              keyExtractor={(_, i) => i.toString()}
+              style={{ maxHeight: 300 }}
+              showsVerticalScrollIndicator={true}
+              renderItem={({ item, index }) => (
+                <Animated.View entering={FadeIn} exiting={FadeOut}>
+                  <TouchableOpacity
+                    style={{
+                      marginBottom: 12,
+                      padding: 12,
+                      backgroundColor: '#fff',
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: '#eee',
+                    }}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/recipe',
+                        params: {
+                          dishName: item.dishName ?? '',
+                          ingredients: JSON.stringify(item.ingredients ?? []),
+                          instructions: JSON.stringify(item.instructions ?? []),
+                          servings: String(item.servings ?? ''),
+                          text: item.prompt ?? '',
+                          photo: item.photo ?? '',
+                        },
+                      })
+                    }
+                  >
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: '#FF6347' }}>
+                      {item.dishName || 'Untitled Dish'}
+                    </Text>
+                  </TouchableOpacity>
+                </Animated.View>
+              )}
+              renderHiddenItem={({ index }, rowMap) => (
+                <Animated.View entering={FadeIn.duration(800).delay(100)}>
+                  <TouchableOpacity
+                    style={{
+                      backgroundColor: '#FF4D4D',
+                      alignItems: 'flex-end',
+                      justifyContent: 'center',
+                      paddingHorizontal: 20,
+                      borderRadius: 10,
+                      marginBottom: 12,
+                      height: '78%',
+                      width: '100%',
+                    }}
+                    onPress={() => {
+                      rowMap?.[index]?.closeRow();
+                      deleteRecipe(index);
+                    }}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: '600' }}>Delete</Text>
+                  </TouchableOpacity>
+                </Animated.View>
+              )}
+              rightOpenValue={-80}
+              disableRightSwipe
+            />
           </View>
         )}
 
-        {/* Mic Modal */}
-        <Modal visible={micVisible} animationType="slide" transparent={false}>
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-            <Mic onTranscript={onMicTranscript} />
-            <Button title="Cancel" onPress={() => setMicVisible(false)} />
-          </View>
-        </Modal>
-      </View>
+        {/* Footer */}
+        <View style={{ marginTop: 40, alignItems: 'center' }}>
+          <Text style={{ fontSize: 14, color: '#777', textAlign: 'center' }}>
+            Melissa is your AI-powered kitchen companion, blending on-device voice, text, and images to spark culinary creativity.
+          </Text>
+          <Text style={{ fontSize: 12, color: '#aaa', marginTop: 10 }}>
+            © {new Date().getFullYear()} Melissa App. All rights reserved.
+          </Text>
+        </View>
+
+      {/* Mic Modal */}
+      <Modal visible={micVisible} animationType="slide" transparent={false}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <Mic
+            onTranscript={onMicTranscript}
+            onCancel={() => setMicVisible(false)}
+          />
+        </View>
+      </Modal>
     </SafeAreaView>
-  );
+  </TouchableWithoutFeedback>
+);
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#FFF9F5' },
-  container: { flex: 1, padding: 24 },
+  safe: { 
+    flex: 1, 
+    paddingHorizontal: 16,
+    backgroundColor: '#FFF9F5' 
+  },
+  container: { 
+    flex: 1,
+    padding: 26 
+  },
   hero: {
     alignItems: 'center',
     marginBottom: 28,
   },
   logo: {
-    fontSize: 36,
+    fontSize: 40,
     fontWeight: '700',
     color: '#FF6347',
   },
@@ -335,16 +331,17 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 6,
     elevation: 3,
-    marginBottom: 20,
+    marginBottom: 12,
+    alignSelf: 'stretch',
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 8,
     backgroundColor: '#fff',
     borderRadius: 10,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderWidth: 1,
     borderColor: '#eee',
   },
@@ -430,13 +427,39 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
   },
-  spinnerWrapper: { marginTop: 20, alignItems: 'center' },
-  spinnerText: { marginTop: 10, fontSize: 16, color: '#555' },
+  inputOverlayWrapper: {
+    position: 'relative',
+    overflow: 'hidden', // 🔒 clips overlay to match rounded corners
+  },
+
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 14, // 🌀 matches inputCard curvature
+    backgroundColor: 'rgba(255, 99, 71, 0.6)', // 🍅 semi-transparent tomato tone
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  spinnerText: {
+    marginTop: 12,
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '500',
+  },
   busyMessage: {
     marginTop: 12,
     textAlign: 'center',
     fontSize: 15,
     color: '#FF6347',
     fontStyle: 'italic',
+  },
+  sideBySideRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 12,
+  },
+  halfInput: {
+    flex: 1,
+    marginRight: 10,
   },
 });

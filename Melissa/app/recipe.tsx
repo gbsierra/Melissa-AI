@@ -13,8 +13,9 @@ import * as ImagePicker from 'expo-image-picker';
 import { useState } from 'react';
 import IngredientModal from '../components/IngredientModal';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Recipe } from '../types/recipe';
 
-const saveRecipe = async (recipe) => {
+const saveRecipe = async (recipe: Recipe) => {
   try {
     const existing = await AsyncStorage.getItem('savedRecipes');
     const recipes = existing ? JSON.parse(existing) : [];
@@ -32,7 +33,14 @@ export default function RecipeScreen() {
   const safeText = typeof params.text === 'string' ? params.text : params.text?.[0] ?? '';
   const safePhoto = typeof params.photo === 'string' ? params.photo : params.photo?.[0] ?? '';
   const safeDishName = typeof params.dishName === 'string' ? params.dishName : params.dishName?.[0] ?? '';
-  const safeServings = typeof params.servings === 'string' ? params.servings : params.servings?.[0] ?? '';
+  const safeServings =
+  typeof params.servings === 'string'
+    ? parseInt(params.servings.trim())
+    : Array.isArray(params.servings) && typeof params.servings[0] === 'string'
+    ? parseInt(params.servings[0].trim())
+    : typeof params.servings === 'number'
+    ? params.servings
+    : undefined;
   const safeIngredients = typeof params.ingredients === 'string' ? params.ingredients : params.ingredients?.[0] ?? '[]';
   const safeInstructions = typeof params.instructions === 'string' ? params.instructions : params.instructions?.[0] ?? '[]';
 
@@ -98,7 +106,7 @@ export default function RecipeScreen() {
         <View style={styles.section}>
           <Text style={styles.title}>🔢 Servings</Text>
           <Text style={styles.content}>
-            {safeServings.trim() !== '' ? `${safeServings} serving${safeServings !== '1' ? 's' : ''}` : 'Not specified'}
+            <Text style={styles.content}>{safeServings}</Text>
           </Text>
         </View>
 

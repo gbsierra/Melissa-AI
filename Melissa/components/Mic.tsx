@@ -11,6 +11,7 @@ import {
 import { FontAwesome } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import * as Speech from 'expo-speech';
+import * as Haptics from 'expo-haptics';
 
 const configureAudioModeForSpeaker = async () => {
   await Audio.setAudioModeAsync({
@@ -51,12 +52,14 @@ const recordingOptions = {
 
 interface MicProps {
   onTranscript: (transcript: string) => void;
+  onCancel: () => void; // lets modal control modal visibility
 }
 
-export default function Mic({ onTranscript }: MicProps) {
+export default function Mic({ onTranscript, onCancel }: MicProps) {
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [loading, setLoading] = useState(false);
+  const wasCancelled = useRef(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -81,6 +84,16 @@ export default function Mic({ onTranscript }: MicProps) {
       pulseAnim.setValue(1);
     }
   }, [isRecording]);
+
+  useEffect(() => {
+    return () => {
+      if (recording) {
+        recording
+          .stopAndUnloadAsync()
+          .catch((err) => console.warn('Recording cleanup failed:', err));
+      }
+    };
+  }, []);
 
   const startRecording = async () => {
     try {
@@ -110,14 +123,19 @@ export default function Mic({ onTranscript }: MicProps) {
       const uri = recording.getURI();
       if (!uri) throw new Error('Recording URI is null');
 
-      const result = await sendToBackend(uri);
-      onTranscript(result);
-      await Speech.speak(`Got it. You said: ${result}`);
+      if (!wasCancelled.current) {
+        const result = await sendToBackend(uri);
+        onTranscript(result);
+        await Speech.speak(`Got it. You said: ${result}`);
+      }
     } catch (error) {
-      console.error('Stop failed:', error);
-      await Speech.speak("Hmm... I couldn't catch that. Wanna try again?");
-      onTranscript('');
+      if (!wasCancelled.current) {
+        console.error('Stop failed:', error);
+        await Speech.speak("Hmm... I couldn't catch that. Wanna try again?");
+        onTranscript('');
+      }
     } finally {
+      wasCancelled.current = false;
       setLoading(false);
       setRecording(null);
     }
@@ -128,6 +146,17 @@ export default function Mic({ onTranscript }: MicProps) {
       stopRecording();
     } else {
       startRecording();
+    }
+  };
+
+  const handleCancel = () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+
+    if (isRecording) {
+      wasCancelled.current = true;
+      stopRecording();
+    } else {
+      onCancel(); // 🔙 Hide the modal passed from index.tsx
     }
   };
 
@@ -167,13 +196,22 @@ export default function Mic({ onTranscript }: MicProps) {
 
       <TouchableOpacity
         style={[styles.micButton, loading && { opacity: 0.5 }]}
-        onPress={toggleRecording}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+          toggleRecording();
+        }}
         disabled={loading}
       >
         <FontAwesome name="microphone" size={28} color="#fff" />
       </TouchableOpacity>
 
-      {loading && <ActivityIndicator style={{ marginTop: 20 }} size="small" color="#FF6347" />}
+      {loading && (
+        <ActivityIndicator style={{ marginTop: 20 }} size="small" color="#FF6347" />
+      )}
+
+      <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
+        <Text style={styles.cancelText}>Cancel</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -182,8 +220,8 @@ const styles = StyleSheet.create({
   container: { alignItems: 'center', justifyContent: 'center' },
   micButton: {
     backgroundColor: '#FF6347',
-    padding: 20,
-    borderRadius: 50,
+    padding: 35,
+    borderRadius: 60,
   },
   pulseCircle: {
     width: 100,
@@ -193,5 +231,19 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -30,
     zIndex: -1,
+  },
+  cancelButton: {
+    marginTop: 50,
+    paddingVertical: 15,
+    paddingHorizontal: 25,
+    borderRadius: 8,
+    backgroundColor: '#ccc',
+    alignSelf: 'center',
+    bottom: -100,
+  },
+  cancelText: {
+    color: '#333',
+    fontSize: 16,
+    fontWeight: '500',
   },
 });
