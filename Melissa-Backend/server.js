@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser'); // still fine if you prefer it
 const multer = require('multer'); // required for file uploads
+require('dotenv').config();
 
 const app = express();
 const PORT = 3001;
@@ -23,7 +24,10 @@ app.use('/api/recipes', recipeRoutes);
 const transcribeRoutes = require('./routes/transcribe');
 app.use('/api/transcribe', transcribeRoutes);
 
+const ingredientRoutes = require('./routes/ingredient');
+app.use('/api/ingredient', ingredientRoutes);
+
 // Start server
 app.listen(PORT, () => {
-  console.log(`🚀 Server running at http://localhost:${PORT}`);
+  console.log(`[Melissa-Backend] 🚀 Server running at http://localhost:${PORT}`);
 });

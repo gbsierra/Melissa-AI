@@ -21,13 +21,14 @@ import { FontAwesome } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 
-import Mic from '../components/Mic';
+import Mic from '../components/MicModal';
 import { HelloWave } from '../components/HelloWave';
 
 import { useSavedRecipes } from '../hooks/useSavedRecipes';
 import { useRetryCooldown } from '../hooks/useRetryCooldown';
 import { useRecipeGenerator } from '../hooks/useRecipeGenerator';
 import { usePhotoManager } from '../hooks/usePhotoManager';
+import { MAX_PHOTOS } from '../constants/constants';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -58,7 +59,7 @@ export default function HomeScreen() {
     photoUris,
     pickCameraPhoto,
     removePhoto,
-  } = usePhotoManager(2); // 2 is max photo limit
+  } = usePhotoManager(MAX_PHOTOS); // 2 is max photo limit
 
   // Generates recipe based on user input 
   const { handleGenerate } = useRecipeGenerator(
@@ -90,7 +91,10 @@ export default function HomeScreen() {
 
         {/* Hero Section */}
         <View style={styles.hero}>
-          <Text style={styles.logo}>👨‍🍳 Melissa</Text>
+          <Image
+            source={require('../assets/images/icon.png')}
+            style={styles.logo}
+          />
           <Text style={styles.subtitle}>Your AI Kitchen Companion</Text>
         </View>
 
@@ -150,6 +154,11 @@ export default function HomeScreen() {
             />
           </View>
 
+          {/* Photo Upload Button */}
+          <TouchableOpacity style={styles.photoButton} onPress={pickCameraPhoto}>
+            <Text style={styles.photoText}>📸 Add Ingredient Requirement</Text>
+          </TouchableOpacity>
+
           {/* Loading Spinner */}
           {loading && (
             <View style={styles.loadingOverlay}>
@@ -165,11 +174,6 @@ export default function HomeScreen() {
           )}
 
         </View>
-
-        {/* Photo Upload Button */}
-        <TouchableOpacity style={styles.photoButton} onPress={pickCameraPhoto}>
-          <Text style={styles.photoText}>📸 Add Ingredient Image</Text>
-        </TouchableOpacity>
 
         {/* Display Ingredient Photos */}
         {photoUris.length > 0 && (
@@ -303,20 +307,21 @@ const styles = StyleSheet.create({
   safe: { 
     flex: 1, 
     paddingHorizontal: 16,
+    paddingVertical: -20,
     backgroundColor: '#FFF9F5' 
   },
   container: { 
     flex: 1,
-    padding: 26 
+    padding: 10
   },
   hero: {
     alignItems: 'center',
-    marginBottom: 28,
+    marginBottom: 12,
   },
   logo: {
-    fontSize: 40,
-    fontWeight: '700',
-    color: '#FF6347',
+    width: 250,
+    height: 100,
+    alignSelf: 'center',
   },
   subtitle: {
     fontSize: 16,
@@ -429,13 +434,12 @@ const styles = StyleSheet.create({
   },
   inputOverlayWrapper: {
     position: 'relative',
-    overflow: 'hidden', // 🔒 clips overlay to match rounded corners
+    overflow: 'hidden',
   },
-
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 14, // 🌀 matches inputCard curvature
-    backgroundColor: 'rgba(255, 99, 71, 0.6)', // 🍅 semi-transparent tomato tone
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 99, 71, 0.4)',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10,

@@ -1,15 +1,28 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const upload = multer(); // You can configure storage if needed later
 
-const { generateRecipe } = require('../controllers/recipeController');
+// Centralized config
+const MAX_PHOTOS = parseInt(process.env.MAX_PHOTOS ?? '0', 10);
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { files: MAX_PHOTOS },
+});
 
-// Multer middleware parses form-data including files
+const { generateRecipe, adjustRecipe } = require('../controllers/recipeController');
+
+// generate new recipe with up to MAX_PHOTOS
 router.post(
   '/generate-recipe',
-  upload.fields([{ name: 'image1' }, { name: 'image2' }]),
+  upload.array('photos', MAX_PHOTOS),
   generateRecipe
+);
+
+// adjust existing recipe with up to MAX_PHOTOS
+router.post(
+  '/adjust-recipe',
+  upload.array('photos', MAX_PHOTOS),
+  adjustRecipe
 );
 
 module.exports = router;

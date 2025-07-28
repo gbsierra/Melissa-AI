@@ -40,4 +40,35 @@ function formatPrompt(imageTags, query, mode, servings, difficulty, cookware) {
   }
 }
 
-module.exports = { formatPrompt };
+/**
+ * @param {string} dishName
+ * @param {string | number} servings
+ * @param {Array<{ group: string, items: (string | { name?: string, item?: string, amount?: string })[] }>} ingredients
+ * @param {string[]} instructions
+ * @param {string} adjustmentPrompt
+ * @param {boolean} hasPhoto
+ * @returns {string}
+ */
+function formatAdjustmentPrompt(dishName, servings, ingredients, instructions, adjustmentPrompt, hasPhoto) {
+  const servingsLine = servings ? ` Approximately ${servings} servings.` : '';
+  const photoLine = hasPhoto ? ' Ingredient image included.' : '';
+  const formatHint = ` Respond strictly with a JSON object like: {"title":"Dish Name","ingredients":[{"group":"Group Name","items":["ingredient 1","ingredient 2"]}],"steps":["Step 1","Step 2"]} Return *only* the JSON.`;
+
+  const ingredientLines = Array.isArray(ingredients)
+    ? ingredients.map(group =>
+        `${group.group}: ${group.items.map(i =>
+          typeof i === 'string'
+            ? i
+            : `${i.name ?? i.item}${i.amount ? ` (${i.amount})` : ''}`
+        ).join(', ')}`
+      ).join(' | ')
+    : 'Ingredients unavailable.';
+
+  const instructionLines = Array.isArray(instructions)
+    ? instructions.map((step, i) => `${i + 1}. ${step}`).join(' | ')
+    : 'Instructions unavailable.';
+
+  return `Input modality: recipe adjustment. Dish: "${dishName}". Ingredients: ${ingredientLines}. Instructions: ${instructionLines}. Adjustment request: "${adjustmentPrompt}".${servingsLine}${photoLine}${formatHint}`;
+}
+
+module.exports = { formatPrompt, formatAdjustmentPrompt };

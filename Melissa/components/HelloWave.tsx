@@ -12,6 +12,8 @@ import Animated, {
 export function HelloWave() {
   const rotation = useSharedValue(0);
   const opacity = useSharedValue(1);
+  const translateX = useSharedValue(17);
+  const translateY = useSharedValue(80);
 
   useEffect(() => {
     rotation.value = withRepeat(
@@ -24,12 +26,17 @@ export function HelloWave() {
       () => {
         // Fade out when done
         opacity.value = withTiming(0, { duration: 400 });
+        translateY.value = withTiming(200, { duration: 130 });
       }
     );
   }, []);
 
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${rotation.value}deg` }],
+    transform: [
+      { rotate: `${rotation.value}deg` },
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+    ],
     opacity: opacity.value,
   }));
 
@@ -43,7 +50,7 @@ export function HelloWave() {
 const styles = StyleSheet.create({
   text: {
     fontSize: 42,
-    lineHeight: 46,
-    marginTop: -6,
+    lineHeight: 66,
+    marginTop: 2,
   },
 });

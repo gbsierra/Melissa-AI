@@ -37,11 +37,11 @@ export const useRecipeGenerator = (
       photoUris
         .filter(uri => uri.startsWith('file://'))
         .forEach((uri, index) => {
-          formData.append(`image${index + 1}`, {
+          formData.append('photos', {
             uri,
             type: 'image/jpeg',
             name: `ingredient_${index + 1}.jpg`,
-          } as unknown as Blob); // React Native FormData type workaround
+          } as unknown as Blob);
         });
 
       const response = await fetch('http://10.0.0.23:3001/api/recipes/generate-recipe', {

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   View,
   Text,
@@ -7,13 +8,19 @@ import {
   TouchableOpacity,
   TextInput,
 } from 'react-native';
-import { useLocalSearchParams, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as ImagePicker from 'expo-image-picker';
-import { useState } from 'react';
-import IngredientModal from '../components/IngredientModal';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+import { useLocalSearchParams, router } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
+
+import IngredientModal from '../components/IngredientModal';
+
 import { Recipe } from '../types/recipe';
+import type { IngredientItem, IngredientGroup } from '../types/ingredients';
+
+import { MAX_PHOTOS } from '../constants/constants';
+
 
 const saveRecipe = async (recipe: Recipe) => {
   try {
@@ -45,40 +52,94 @@ export default function RecipeScreen() {
   const safeInstructions = typeof params.instructions === 'string' ? params.instructions : params.instructions?.[0] ?? '[]';
 
   const [adjustText, setAdjustText] = useState('');
-  const [secondPhoto, setSecondPhoto] = useState<string | null>(null);
+  const [additionalPhotos, setAdditionalPhotos] = useState<string[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedIngredient, setSelectedIngredient] = useState<{ name: string; amount: string } | null>(null);
 
-  const parsedIngredients = (() => {
+  const [parsedIngredients, setParsedIngredients] = useState<IngredientGroup[]>(() => {
     try {
       const parsed = JSON.parse(safeIngredients);
       if (Array.isArray(parsed)) {
         if (parsed.every(i => typeof i === 'string')) {
           return [{ group: 'Ingredients', items: parsed }];
         } else if (parsed.every(i => Array.isArray(i.items))) {
-          return parsed;
+          return parsed as IngredientGroup[];
         }
       }
       return [];
     } catch {
       return [];
     }
-  })();
+  });
 
-  const parsedInstructions = Array.isArray(safeInstructions)
-    ? safeInstructions
-    : (() => {
-        try {
-          const parsed = JSON.parse(safeInstructions);
-          return Array.isArray(parsed) ? parsed : [];
-        } catch {
-          return [];
-        }
-      })();
+  const [parsedInstructions, setParsedInstructions] = useState<string[]>(() => {
+    try {
+      const parsed = JSON.parse(safeInstructions);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
 
-  const handlePickSecondImage = async () => {
+  const { suggestAmountForSwap } = require('../utils/ingredientSwapAmount');
+
+  const handlePickAdditionalPhoto = async () => {
+    if (additionalPhotos.length >= MAX_PHOTOS) {
+      alert(`You can only add up to ${MAX_PHOTOS} ingredient photos.`);
+      return;
+    }
+
     const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
-    if (!result.canceled) setSecondPhoto(result.assets[0].uri);
+    if (!result.canceled) {
+      setAdditionalPhotos(prev => [...prev, result.assets[0].uri]);
+    }
+  };
+
+  const handleAdjustRecipe = async () => {
+    if (!adjustText && (!additionalPhotos || additionalPhotos.length === 0)) {
+      alert('Please enter a prompt or add one or more photos to adjust the recipe.');
+      return;
+    }
+
+    try {
+      const formData = new FormData();
+
+      formData.append('dishName', safeDishName);
+      formData.append('servings', String(safeServings));
+      formData.append('ingredients', JSON.stringify(parsedIngredients));
+      formData.append('instructions', JSON.stringify(parsedInstructions));
+      formData.append('adjustmentPrompt', adjustText);
+
+      // Append each photo
+      additionalPhotos?.forEach((photoUri, index) => {
+        const fileName = photoUri.split('/').pop() ?? `ingredient-${index + 1}.jpg`;
+        formData.append('photos', {
+          uri: photoUri,
+          name: fileName,
+          type: 'image/jpeg',
+        } as any);
+      });
+
+      const response = await fetch('http://10.0.0.23:3001/api/recipes/adjust-recipe', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (data.ingredients) setParsedIngredients(data.ingredients);
+      if (data.instructions) setParsedInstructions(data.instructions);
+
+      setAdjustText('');
+      setAdditionalPhotos([]); // Clear array
+    } catch (err) {
+      console.error('🔧 Recipe adjustment failed:', err);
+      alert('Unable to adjust recipe at this time.');
+    }
+  };
+
+  const removePhoto = (index: number) => {
+    setAdditionalPhotos(prev => prev.filter((_, i) => i !== index));
   };
 
   return (
@@ -188,10 +249,33 @@ export default function RecipeScreen() {
             value={adjustText}
             onChangeText={setAdjustText}
           />
-          <TouchableOpacity style={styles.photoButton} onPress={handlePickSecondImage}>
-            <Text style={styles.photoText}>📸 Send Another Ingredient Photo</Text>
+
+          <TouchableOpacity style={styles.photoButton} onPress={handlePickAdditionalPhoto}>
+            <Text style={styles.photoText}>📸 Add Ingredient Photo</Text>
           </TouchableOpacity>
-          {secondPhoto && <Image source={{ uri: secondPhoto }} style={styles.imageSmall} />}
+
+          <TouchableOpacity
+            style={[styles.adjustButton, !(adjustText || additionalPhotos) && styles.disabled]}
+            onPress={handleAdjustRecipe}
+          >
+            <Text style={styles.adjustText}>🔧 Apply Adjustments</Text>
+          </TouchableOpacity>
+
+          {additionalPhotos.length > 0 && (
+            <View style={styles.photoContainer}>
+              {additionalPhotos.map((uri, index) => (
+                <View key={uri} style={styles.photoWrapper}>
+                  <Image source={{ uri }} style={styles.photoThumbnail} />
+                  <TouchableOpacity
+                    style={styles.deleteButton}
+                    onPress={() => removePhoto(index)}
+                  >
+                    <Text style={styles.deleteButtonText}>×</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          )}
         </View>
 
         <View style={styles.footerActions}>
@@ -218,12 +302,53 @@ export default function RecipeScreen() {
       </ScrollView>
 
       {selectedIngredient && (
-        <IngredientModal
-          visible={modalVisible}
-          onClose={() => setModalVisible(false)}
-          ingredient={selectedIngredient}
-        />
-      )}
+      <IngredientModal
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        ingredient={selectedIngredient}
+        onSwap={async (originalName: string, substituteName: string) => {
+          const targetGroup = parsedIngredients.find(group =>
+            group.items.some(item =>
+              (typeof item === 'object' ? item.name ?? item.item : item) === originalName
+            )
+          );
+
+          const originalItem = targetGroup?.items.find(item =>
+            (typeof item === 'object' ? item.name ?? item.item : item) === originalName
+          );
+
+          console.log('🔍 Swap inputs:', {
+            originalName, // e.g. "½ tsp anise seeds"
+            substituteName,
+          });
+
+          const { adjustedAmount } = await suggestAmountForSwap(originalName, substituteName);
+
+          const updated = parsedIngredients.map(group => {
+            const updatedItems = Array.isArray(group.items)
+              ? group.items.map((item: string | { name?: string; item?: string; amount?: string }) => {
+                  const name = typeof item === 'object' ? item.name ?? item.item : item;
+
+                  if (name === originalName) {
+                    const newName = adjustedAmount; // e.g. "½ tsp ground star anise"
+
+                    return typeof item === 'string'
+                      ? newName // If item was just a string, replace it directly
+                      : { ...item, name: newName, amount: undefined }; // Remove separate amount field
+                  }
+
+                  return item;
+                })
+              : [];
+
+            return { ...group, items: updatedItems };
+          });
+
+          setParsedIngredients(updated);
+          setModalVisible(false);
+        }}
+      />
+    )}
     </SafeAreaView>
   );
 }
@@ -233,11 +358,27 @@ const styles = StyleSheet.create({
   container: { padding: 20 },
   header: { fontSize: 24, fontWeight: '700', marginBottom: 20, color: '#FF6347' },
 
-  photoWrapper: { alignItems: 'center', marginBottom: 10 },
-  image: { width: 120, height: 120, borderRadius: 10 },
-  imageSmall: { width: 100, height: 100, borderRadius: 10, marginTop: 10 },
-  photoLabel: { fontSize: 12, marginTop: 5, color: '#555' },
-
+  photoWrapper: {
+    alignItems: 'center',
+    marginBottom: 10,
+    position: 'relative',
+  },
+  image: { 
+    width: 120, 
+    height: 120, 
+    borderRadius: 10 
+  },
+  imageSmall: { 
+  width: 100, 
+    height: 100, 
+    borderRadius: 10, 
+    marginTop: 10 
+  },
+  photoLabel: { 
+    fontSize: 12, 
+    marginTop: 5, 
+    color: '#555' 
+  },
   section: {
     marginTop: 20,
     padding: 16,
@@ -321,4 +462,50 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  adjustButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginTop: 12,
+  },
+
+  adjustText: {
+    color: '#fff',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+
+  disabled: {
+    opacity: 0.5,
+  },
+    photoContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10, // or use margin
+    marginVertical: 12,
+    justifyContent: 'flex-start',
+  },
+  photoThumbnail: {
+    width: 100,
+    height: 100,
+    borderRadius: 8,
+  },
+  deleteButton: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    backgroundColor: '#f44',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deleteButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+
 });
