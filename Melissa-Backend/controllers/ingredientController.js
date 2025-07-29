@@ -1,12 +1,19 @@
 const genAI = require('../services/geminiClient');
 const { callFallbackAPI } = require('../services/fallbackClient');
+const { formatSubstitutionAmountPrompt, formatSubstitutionListPrompt } = require('../utils/formatPrompt');
+
 
 // 
 function safeParse(text) {
+  if (typeof text !== 'string') return null;
+
+  // 🧼 Remove Markdown fences
+  const cleaned = text.replace(/^\s*```json\s*|\s*```$/g, '').trim();
+
   try {
-    return JSON.parse(text);
+    return JSON.parse(cleaned);
   } catch (err) {
-    console.warn('❗ Failed to parse Gemini response:', text);
+    console.warn('❗ Failed to parse response:', cleaned);
     return null;
   }
 }
@@ -15,14 +22,12 @@ function safeParse(text) {
 async function getSuggestedIngredients(req, res) {
   const { ingredient = '' } = req.params;
   if (!ingredient) return res.status(400).json({ error: 'Missing ingredient parameter.' });
+  
+  console.log(`\n[Melissa-Backend] 🔍 Generating substitutes for "${ingredient}"`);
+  const prompt = formatSubstitutionListPrompt(ingredient);
 
   try {
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-
-    const prompt = `
-      You're a culinary assistant. Suggest three widely available substitutes for "${ingredient}".
-      Reply with JSON: { "substitutes": ["Alt1", "Alt2", "Alt3"] }
-          `;
 
     const result = await model.generateContent(prompt);
     const responseText = result.response.text().replace(/```json|```/g, '').trim();
@@ -35,8 +40,7 @@ async function getSuggestedIngredients(req, res) {
     console.warn('⚠️ Gemini failed:', err.message);
 
     try {
-      const fallbackPrompt = `Suggest 3 common ingredient swaps for ${ingredient}. Respond as: { "substitutes": [...] }`;
-      const fallback = await callFallbackAPI(fallbackPrompt);
+      const fallback = await callFallbackAPI(prompt);
       const parsedFallback = safeParse(fallback?.body || fallback);
       if (parsedFallback?.substitutes) {
         return res.json({ substitutes: parsedFallback.substitutes });
@@ -57,21 +61,11 @@ async function getSwapAmount(req, res) {
     return res.status(400).json({ error: 'Missing parameters.' });
   }
 
+  console.log('\n[Melissa-Backend] 🔍 Swap inputs:', { originalName, substituteName });
+  const prompt = formatSubstitutionAmountPrompt(originalName, substituteName);
+
   try {
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-
-    const prompt = `
-      You're a culinary assistant helping with ingredient substitutions.
-
-      Given "${originalName}", suggest the precise quantity of "${substituteName}" needed to match its role in a recipe. Adjust based on flavor intensity, acidity, and typical usage.
-
-      Respond only in structured JSON:
-      {
-        "amount": "just the numeric portion, e.g. ½",
-        "unit": "measurement unit, e.g. tsp, tbsp, cup",
-        "ingredient": "name of the substituted ingredient, e.g. ground star anise"
-      }
-      `;
 
     const result = await model.generateContent(prompt);
     const responseText = result.response.text().replace(/```json|```/g, '').trim();
@@ -88,15 +82,24 @@ async function getSwapAmount(req, res) {
     console.warn('⚠️ Gemini suggestion failed:', err.message);
 
     try {
-      const fallbackPrompt = `
-Suggest an adjusted amount for swapping "${originalName}" with "${substituteName}".
-Respond only as: { "adjustedAmount": "e.g. ½ tsp ground star anise" }
-      `;
-      const fallback = await callFallbackAPI(fallbackPrompt);
+      const fallback = await callFallbackAPI(prompt);
       const parsedFallback = safeParse(fallback?.body || fallback);
+
       if (parsedFallback?.adjustedAmount) {
         return res.json({ adjustedAmount: parsedFallback.adjustedAmount });
       }
+
+      // 💡 Handle normalized fallback structure
+      const first = parsedFallback?.ingredients?.[0];
+      if (first?.amount && first?.unit && first?.ingredient) {
+        const adjustedAmount = [first.amount, first.unit, first.ingredient]
+          .filter(Boolean)
+          .join(' ')
+          .trim();
+        return res.json({ adjustedAmount });
+      }
+
+      console.warn('⚠️ Fallback returned unexpected shape:', parsedFallback);
     } catch (fallbackErr) {
       console.error('❌ Fallback also failed:', fallbackErr.message);
     }

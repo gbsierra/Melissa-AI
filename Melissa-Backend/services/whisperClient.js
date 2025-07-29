@@ -8,7 +8,7 @@ function runWhisper(audioPath) {
     // ✅ Use Python from your virtual environment
     const pythonPath = path.join(__dirname, '..', 'venv', 'Scripts', 'python.exe'); // Windows-specific
 
-    console.log('[Melissa-Backend] Running Whisper for audio transcription.');
+    console.log('\n[Melissa-Backend] Running Whisper for audio transcription.');
     // console.log(pythonPath, pythonScript);
     const process = spawn(pythonPath, [pythonScript, audioPath]);
 

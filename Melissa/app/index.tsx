@@ -7,16 +7,11 @@ import {
   StyleSheet,
   TouchableOpacity,
   Image,
-  ActivityIndicator,
   Modal,
   TouchableWithoutFeedback,
   Keyboard,
 } from 'react-native';
-import Animated from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { SwipeListView } from 'react-native-swipe-list-view';
-import { FadeIn, FadeOut } from 'react-native-reanimated';
-
 import { FontAwesome } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -29,6 +24,10 @@ import { useRetryCooldown } from '../hooks/useRetryCooldown';
 import { useRecipeGenerator } from '../hooks/useRecipeGenerator';
 import { usePhotoManager } from '../hooks/usePhotoManager';
 import { MAX_PHOTOS } from '../constants/constants';
+
+import { SavedRecipesList } from '../components/SavedRecipesList';
+import { LoadingOverlay } from '../components/LoadingOverlay';
+
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -102,6 +101,7 @@ export default function HomeScreen() {
         <View style={styles.inputCard}>
           {/* Top Input Row */}
           <View style={styles.inputWrapper}>
+            {/* Text Input */}
             <TextInput
               style={styles.input}
               placeholder="Dish, genre, or ingredients..."
@@ -112,6 +112,7 @@ export default function HomeScreen() {
               }}
               placeholderTextColor="#aaa"
             />
+            {/* Microphone button */}
             <TouchableOpacity
               style={styles.micButton}
               onPress={() => setMicVisible(true)}
@@ -159,19 +160,8 @@ export default function HomeScreen() {
             <Text style={styles.photoText}>📸 Add Ingredient Requirement</Text>
           </TouchableOpacity>
 
-          {/* Loading Spinner */}
-          {loading && (
-            <View style={styles.loadingOverlay}>
-              <Animated.View
-                entering={FadeIn}
-                exiting={FadeOut}
-                style={styles.loadingOverlay}
-              >
-                <ActivityIndicator size="large" color="#fff" />
-                <Text style={styles.spinnerText}>Generating your recipe...</Text>
-              </Animated.View>
-            </View>
-          )}
+          {/* Loading Spinner & Overlay */}
+          <LoadingOverlay visible={loading} text="Generating your recipe..." />
 
         </View>
 
@@ -210,74 +200,9 @@ export default function HomeScreen() {
         )}
 
         {/* Saved Recipes with Swipe & Animation */}
-        {savedRecipes.length > 0 && (
-          <View style={{ marginTop: 30 }}>
-            <Text style={{ fontSize: 18, fontWeight: '600', marginBottom: 10 }}>
-              📁 Saved Recipes
-            </Text>
-            <SwipeListView
-              data={savedRecipes}
-              keyExtractor={(_, i) => i.toString()}
-              style={{ maxHeight: 300 }}
-              showsVerticalScrollIndicator={true}
-              renderItem={({ item, index }) => (
-                <Animated.View entering={FadeIn} exiting={FadeOut}>
-                  <TouchableOpacity
-                    style={{
-                      marginBottom: 12,
-                      padding: 12,
-                      backgroundColor: '#fff',
-                      borderRadius: 10,
-                      borderWidth: 1,
-                      borderColor: '#eee',
-                    }}
-                    onPress={() =>
-                      router.push({
-                        pathname: '/recipe',
-                        params: {
-                          dishName: item.dishName ?? '',
-                          ingredients: JSON.stringify(item.ingredients ?? []),
-                          instructions: JSON.stringify(item.instructions ?? []),
-                          servings: String(item.servings ?? ''),
-                          text: item.prompt ?? '',
-                          photo: item.photo ?? '',
-                        },
-                      })
-                    }
-                  >
-                    <Text style={{ fontSize: 16, fontWeight: '600', color: '#FF6347' }}>
-                      {item.dishName || 'Untitled Dish'}
-                    </Text>
-                  </TouchableOpacity>
-                </Animated.View>
-              )}
-              renderHiddenItem={({ index }, rowMap) => (
-                <Animated.View entering={FadeIn.duration(800).delay(100)}>
-                  <TouchableOpacity
-                    style={{
-                      backgroundColor: '#FF4D4D',
-                      alignItems: 'flex-end',
-                      justifyContent: 'center',
-                      paddingHorizontal: 20,
-                      borderRadius: 10,
-                      marginBottom: 12,
-                      height: '78%',
-                      width: '100%',
-                    }}
-                    onPress={() => {
-                      rowMap?.[index]?.closeRow();
-                      deleteRecipe(index);
-                    }}
-                  >
-                    <Text style={{ color: '#fff', fontWeight: '600' }}>Delete</Text>
-                  </TouchableOpacity>
-                </Animated.View>
-              )}
-              rightOpenValue={-80}
-              disableRightSwipe
-            />
-          </View>
-        )}
+        <View style={{ maxHeight: 200, position: 'relative' }}>
+          <SavedRecipesList savedRecipes={savedRecipes} deleteRecipe={deleteRecipe} />
+        </View>
 
         {/* Footer */}
         <View style={{ marginTop: 40, alignItems: 'center' }}>
@@ -289,15 +214,16 @@ export default function HomeScreen() {
           </Text>
         </View>
 
-      {/* Mic Modal */}
-      <Modal visible={micVisible} animationType="slide" transparent={false}>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-          <Mic
-            onTranscript={onMicTranscript}
-            onCancel={() => setMicVisible(false)}
-          />
-        </View>
-      </Modal>
+        {/* Mic Modal */}
+        <Modal visible={micVisible} animationType="slide" transparent={false}>
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+            <Mic
+              onTranscript={onMicTranscript}
+              onCancel={() => setMicVisible(false)}
+            />
+          </View>
+        </Modal>
+        
     </SafeAreaView>
   </TouchableWithoutFeedback>
 );

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   Modal,
   View,
@@ -7,26 +8,33 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useIngredientSuggestions } from '../hooks/useIngredientSuggestions';
+import type { Ingredient } from '../types/ingredients';
 
-type Ingredient = {
-  name: string;
-  amount?: string;
-};
-
-type IngredientModalProps = {
+export type IngredientModalProps = {
   visible: boolean;
   onClose: () => void;
   ingredient: Ingredient;
   onSwap?: (originalName: string, substituteName: string) => void;
+  loading: boolean;
+  suggestions: string[];
 };
+
 
 export default function IngredientModal({
   visible,
   onClose,
   ingredient,
   onSwap,
+  loading,
 }: IngredientModalProps) {
-  const { suggestions, loading } = useIngredientSuggestions(ingredient.name);
+  const [retryCooldown, setRetryCooldown] = useState<number | null>(null);
+  const [quotaMessage, setQuotaMessage] = useState<string | null>(null);
+
+  const { suggestions, loading: suggestionsLoading } = useIngredientSuggestions(
+    ingredient.name,
+    setRetryCooldown,
+    setQuotaMessage,
+  );
 
   return (
     <Modal transparent visible={visible} animationType="fade">
@@ -34,6 +42,10 @@ export default function IngredientModal({
         <View style={styles.modal}>
           <Text style={styles.title}>🧂 {ingredient.name}</Text>
           <Text style={styles.sub}>Suggested Substitutes:</Text>
+
+          {quotaMessage && (
+            <Text style={{ color: 'red', marginBottom: 8 }}>{quotaMessage}</Text>
+          )}
 
           {loading ? (
             <ActivityIndicator size="small" color="#888" style={{ marginVertical: 8 }} />
@@ -43,6 +55,12 @@ export default function IngredientModal({
                 <Text style={styles.alt}>🔄 {alt}</Text>
               </TouchableOpacity>
             ))
+          )}
+
+          {retryCooldown && (
+            <Text style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
+              Try again in {retryCooldown}s
+            </Text>
           )}
 
           <TouchableOpacity onPress={onClose}>

@@ -1,5 +1,5 @@
 const genAI = require('../services/geminiClient');
-const { formatPrompt, formatAdjustmentPrompt } = require('../../Melissa/utils/formatPrompt');
+const { formatPrompt, formatAdjustmentPrompt } = require('../utils/formatPrompt');
 const { callFallbackAPI } = require('../services/fallbackClient');
 
 //
@@ -50,16 +50,16 @@ async function generateRecipe(req, res) {
     cookware = ''
   } = req.body || {};
 
-  console.log('[Melissa] 🔍 Incoming body:', req.body);
-  console.log('[Melissa] 📂 Incoming files:', req.files);
-  console.log(`[Melissa] 🍳 Mode selected: ${mode}`);
+  //console.log('\n[Melissa-Backend] 🔍 Incoming body:', req.body);
+  //console.log('[Melissa-Backend] 📂 Incoming files:', req.files);
+  console.log(`\n[Melissa-Backend] 🍳 Mode selected: ${mode}`);
 
   if (!mode) {
     return res.status(400).json({ error: 'Missing input mode (image-only, voice-only, fusion, or text-only)' });
   }
 
   const prompt = formatPrompt(imageTags, voiceText || manualText || query || '', mode, servings, difficulty, cookware);
-  console.log('[Melissa] 🧠 Formatted Prompt:\n', prompt);
+  console.log('[Melissa-Backend] 🧠 Formatted Prompt:\n', prompt);
 
   let input;
 
@@ -75,7 +75,7 @@ async function generateRecipe(req, res) {
     }
 
     const imageParts = imageFiles.map((file, idx) => {
-      console.log(`[Melissa] 🖼 Image ${idx + 1} received: ${file.originalname}, ${file.size} bytes`);
+      console.log(`[Melissa-Backend] Image ${idx + 1} received: ${file.originalname}, ${file.size} bytes`);
       return {
         inlineData: {
           data: file.buffer.toString('base64'),
@@ -98,7 +98,8 @@ async function generateRecipe(req, res) {
     if (!rawRecipe) throw new Error('Gemini returned invalid recipe format');
 
     const recipe = normalizeRecipe(rawRecipe, prompt, servings);
-    console.log('[Melissa] ✅ Gemini normalized recipe:', recipe);
+    //console.log('\n[Melissa-Backend] Recipe Output:', recipe);
+    console.log('\n[Melissa-Backend] Recipe Output Recieved!');
     return res.json(recipe);
   } catch (err) {
     const errMsg = err?.message?.toLowerCase?.() || '';
@@ -131,7 +132,7 @@ async function generateRecipe(req, res) {
   }
 }
 
-//
+// Function to adjustRecipe from given input
 async function adjustRecipe(req, res) {
   const {
     dishName,
@@ -143,18 +144,20 @@ async function adjustRecipe(req, res) {
 
   const files = req.files || []; // multiple uploaded photos
   const ingredientPhotos = files.map(file => file.buffer); // array of Buffers
+  
+  //console.log('\n[Melissa-Backend] Adjustment input:', {dishName,servings,ingredients,instructions});
+  console.log('\n[Melissa-Backend] ✏️ Adjustment prompt:', adjustmentPrompt);
+  console.log('[Melissa-Backend] 📷 Additional photos:', files.map(f => f.originalname).join(', '));
 
-  console.log('[Melissa] ✏️ Adjustment prompt:', adjustmentPrompt);
-  console.log('[Melissa] 📷 Additional photos:', files.map(f => f.originalname).join(', '));
+  const parsedIngredients =
+  typeof ingredients === 'string' ? JSON.parse(ingredients) : ingredients;
 
-  const prompt = formatAdjustmentPrompt(
-    dishName,
-    servings,
-    ingredients,
-    instructions,
-    adjustmentPrompt,
-    ingredientPhotos
-  );
+  const parsedInstructions =
+    typeof instructions === 'string' ? JSON.parse(instructions) : instructions;
+
+
+  const prompt = formatAdjustmentPrompt(dishName, servings, parsedIngredients, parsedInstructions, adjustmentPrompt, ingredientPhotos);
+  console.log('[Melissa-Backend] 🧠 Formatted Prompt:\n', prompt);
 
   const input = ingredientPhotos.length > 0
     ? [

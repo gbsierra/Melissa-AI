@@ -1,6 +1,7 @@
 //
-async function suggestAmountForSwap(originalName, substituteName) {
+async function suggestAmountForSwap(originalName, substituteName, setLoading) {
   try {
+    setLoading(true);
     const response = await fetch('http://10.0.0.23:3001/api/ingredient/swap-amount', {
       method: 'POST',
       headers: {
@@ -29,6 +30,8 @@ async function suggestAmountForSwap(originalName, substituteName) {
       adjustedAmount: '1 tsp',
       note: 'Error fetching adjusted amount',
     };
+  } finally {
+    setLoading(false);
   }
 }
 
