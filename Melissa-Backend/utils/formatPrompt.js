@@ -3,13 +3,12 @@
  */
 
 /**
- * @param {string[]} imageTags
  * @param {string} query
  * @param {InputMode} mode
  * @param {string | number} [servings] // Optional servings input
  * @returns {string}
  */
-function formatPrompt(imageTags, query, mode, servings, difficulty, cookware) {
+function formatPrompt(query, mode, servings, difficulty, cookware) {
   const servingsLine = servings ? ` Approximately ${servings} servings.` : '';
   const difficultyLine = difficulty ? ` Desired difficulty is "${difficulty}".` : '';
   const cookwareLine = cookware ? ` Must use: ${cookware}.` : '';
@@ -27,14 +26,12 @@ function formatPrompt(imageTags, query, mode, servings, difficulty, cookware) {
     Return *only* the JSON. No markdown, no commentary, no explanation.`;
 
   switch (mode) {
-    case 'image-only':
-      return `Input modality: visual tags. Tags detected: ${imageTags.join(', ')}. Task: generate a recipe.${servingsLine}${difficultyLine}${cookwareLine}${formatHint}`;
-    case 'voice-only':
-      return `Input modality: voice transcript. Transcript received: "${query}". Task: generate a recipe.${servingsLine}${difficultyLine}${cookwareLine}${formatHint}`;
-    case 'fusion':
-      return `Input modality: fusion. Tags detected: ${imageTags.join(', ')}. Transcript received: "${query}". Task: generate a recipe that integrates both inputs.${servingsLine}${difficultyLine}${cookwareLine}${formatHint}`;
     case 'text-only':
-      return `Input modality: textual request. User input: "${query}". Task: generate a recipe.${servingsLine}${difficultyLine}${cookwareLine}${formatHint}`;
+      return `Task: generate a recipe. User input: "${query}".${servingsLine}${difficultyLine}${cookwareLine}${formatHint}`;
+    case 'image-only':
+      return `Task: generate a recipe.${servingsLine}${difficultyLine}${cookwareLine}${formatHint}`; //images are appended in recipeController
+    case 'fusion':
+      return `Task: generate a recipe. User input: "${query}".${servingsLine}${difficultyLine}${cookwareLine}${formatHint}`; //images are appended in recipeController
     default:
       throw new Error(`Invalid mode: ${mode}`);
   }
@@ -53,7 +50,17 @@ function formatAdjustmentPrompt(dishName, servings, ingredients, instructions, a
   const servingsLine = servings ? ` Approximately ${servings} servings.` : '';
   //const photoLine = hasPhoto ? ' Ingredient image included.' : '';
   
-  const formatHint = ` Respond strictly with a JSON object like: {"title":"Dish Name","ingredients":[{"group":"Group Name","items":["ingredient 1","ingredient 2"]}],"steps":["Step 1","Step 2"]} Return *only* the JSON.`;
+  const formatHint = ` Respond strictly with a JSON object like: 
+    {
+      "title":"Dish Name",
+      "ingredients":[
+        {"group":"Group Name",
+        "items":["ingredient 1","ingredient 2"]
+        }
+      ],
+      "steps":["Step 1","Step 2"]
+    } 
+    Return *only* the JSON. No markdown, no commentary, no explanation.`;
 
   const ingredientLines = Array.isArray(ingredients)
     ? ingredients.map(group =>
@@ -69,7 +76,7 @@ function formatAdjustmentPrompt(dishName, servings, ingredients, instructions, a
     ? instructions.map((step, i) => `${i + 1}. ${step}`).join(' | ')
     : 'Instructions unavailable.';
 
-  return `Input modality: Recipe adjustment for Dish: "${dishName}".${servingsLine} Ingredients: ${ingredientLines}. Instructions: ${instructionLines}. Don't change anything besides Adjustment request: "${adjustmentPrompt}".${formatHint}`;
+  return `Task: recipe adjustment for Dish: "${dishName}".${servingsLine} Ingredients: ${ingredientLines}. Instructions: ${instructionLines}. Don't change anything besides Adjustment request: "${adjustmentPrompt}".${formatHint}`;
 }
 
 /**
@@ -78,11 +85,8 @@ function formatAdjustmentPrompt(dishName, servings, ingredients, instructions, a
  * @returns {string} - Formatted prompt for AI substitution logic
  */
 function formatSubstitutionAmountPrompt(originalName, substituteName) {
-  return `You're a culinary assistant helping with ingredient substitutions.
-
-  Given "${originalName}", suggest the precise quantity of "${substituteName}" needed to match its role in a recipe. Adjust based on flavor intensity, acidity, and typical usage.
-
-  Respond only in structured JSON, NO MARKDOWN, NO TRIPLE BACKTICKS:
+  return `Task: Given "${originalName}", suggest the precise quantity of "${substituteName}" needed to match its role in a recipe. Adjust based on flavor intensity, acidity, and typical usage.
+  Return *only* the JSON. No markdown, no commentary, no explanation:
   {
     "amount": "just the numeric portion, e.g. ½",
     "unit": "measurement unit, e.g. tsp, tbsp, cup",
@@ -96,7 +100,7 @@ function formatSubstitutionAmountPrompt(originalName, substituteName) {
  * @returns {string} - AI-ready prompt string
  */
 function formatSubstitutionListPrompt(ingredient) {
-  return `You're a culinary assistant. Suggest three widely available substitutes for "${ingredient}". Reply with JSON: { "substitutes": ["Alt1", "Alt2", "Alt3"] }`;
+  return `Task: Suggest three widely available substitutes for "${ingredient}". Return *only* the JSON. No markdown, no commentary, no explanation: { "substitutes": ["Alt1", "Alt2", "Alt3"] }`;
 }
 
 module.exports = { formatPrompt, formatAdjustmentPrompt, formatSubstitutionAmountPrompt, formatSubstitutionListPrompt };

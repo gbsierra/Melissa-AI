@@ -11,18 +11,18 @@ const upload = multer({
 
 const { generateRecipe, adjustRecipe } = require('../controllers/recipeController');
 
-// generate new recipe with up to MAX_PHOTOS
+// endpoint to generate new recipe with up to MAX_PHOTOS
 router.post(
   '/generate-recipe',
-  upload.array('photos', MAX_PHOTOS),
-  generateRecipe
+  upload.array('photos', MAX_PHOTOS), //multer middleware, uploading passed images to req.files
+  generateRecipe //uses req.body and req.files as input
 );
 
-// adjust existing recipe with up to MAX_PHOTOS
+// endpoint to adjust existing recipe with up to MAX_PHOTOS
 router.post(
   '/adjust-recipe',
-  upload.array('photos', MAX_PHOTOS),
-  adjustRecipe
+  upload.array('photos', MAX_PHOTOS), //multer middleware, uploading passed images to req.files
+  adjustRecipe //uses req.body and req.files as input
 );
 
 module.exports = router;

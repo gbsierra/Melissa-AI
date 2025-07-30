@@ -12,7 +12,7 @@ export const useRecipeGenerator = (
   setQuotaMessage: (msg: string | null) => void,
   setLoading: (val: boolean) => void
 ) => {
-  // Determines mode based on user input and image presence
+  // Helper func - Determines mode based on user input and image presence
   const determineMode = (text: string, imageFlag: string): 'fusion' | 'image-only' | 'text-only' => {
     if (text && imageFlag) return 'fusion';
     if (imageFlag) return 'image-only';
@@ -25,16 +25,15 @@ export const useRecipeGenerator = (
     setLoading(true);
 
     try {
+      // create formData with necessary fields
       const formData = new FormData();
-      formData.append('query', query);
-      formData.append('servings', servings !== null ? servings.toString() : 'not provided');
-      formData.append('difficulty', difficulty);
-      formData.append('cookware', cookware);
-
-      const mode = determineMode(query, photoUris.length > 0 ? 'has-images' : '');
-      formData.append('mode', mode);
-
-      photoUris
+      formData.append('query', query);                                                        // query - text or voice input
+      formData.append('servings', servings !== null ? servings.toString() : 'not provided');  // servings
+      formData.append('difficulty', difficulty);                                              // difficulty
+      formData.append('cookware', cookware);                                                  // cookware
+      const mode = determineMode(query, photoUris.length > 0 ? 'has-images' : '');             
+      formData.append('mode', mode);                                                          // mode
+      photoUris                                                                               // photos
         .filter(uri => uri.startsWith('file://'))
         .forEach((uri, index) => {
           formData.append('photos', {
@@ -43,10 +42,11 @@ export const useRecipeGenerator = (
             name: `ingredient_${index + 1}.jpg`,
           } as unknown as Blob);
         });
-
+      
+      // fetch backend endpoint to generate recipe
       const response = await fetch('http://10.0.0.23:3001/api/recipes/generate-recipe', {
         method: 'POST',
-        body: formData,
+        body: formData, //passing to be serialized into req.body and req.files
       });
 
       if (!response.ok) {

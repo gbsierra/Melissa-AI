@@ -14,7 +14,7 @@ export const useSuggestAmountForSwap = (
       setLoading(true);
 
       const response = await fetch(
-        'http://10.0.0.23:3001/api/ingredient/swap-amount',
+        'http://10.0.0.23:3001/api/ingredient/suggest/swap-amount',
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

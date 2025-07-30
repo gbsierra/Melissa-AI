@@ -13,6 +13,7 @@ import { Audio } from 'expo-av';
 import * as Speech from 'expo-speech';
 import * as Haptics from 'expo-haptics';
 
+//
 const configureAudioModeForSpeaker = async () => {
   await Audio.setAudioModeAsync({
     allowsRecordingIOS: true,
@@ -25,6 +26,7 @@ const configureAudioModeForSpeaker = async () => {
   });
 };
 
+//
 const recordingOptions = {
   android: {
     extension: '.m4a',
@@ -50,11 +52,13 @@ const recordingOptions = {
   },
 };
 
+//
 interface MicProps {
   onTranscript: (transcript: string) => void;
   onCancel: () => void; // lets modal control modal visibility
 }
 
+//
 export default function Mic({ onTranscript, onCancel }: MicProps) {
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [isRecording, setIsRecording] = useState(false);

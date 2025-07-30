@@ -61,7 +61,7 @@ async function getSwapAmount(req, res) {
     return res.status(400).json({ error: 'Missing parameters.' });
   }
 
-  console.log('\n[Melissa-Backend] 🔍 Swap inputs:', { originalName, substituteName });
+  console.log('\n[Melissa-Backend] 🔍 Generating substitute amount for swap inputs:', { originalName, substituteName });
   const prompt = formatSubstitutionAmountPrompt(originalName, substituteName);
 
   try {

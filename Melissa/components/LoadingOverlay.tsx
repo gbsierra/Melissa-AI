@@ -2,12 +2,14 @@ import { View, Text, ActivityIndicator, StyleSheet, ViewStyle } from 'react-nati
 import Animated from 'react-native-reanimated';
 import { FadeIn, FadeOut } from 'react-native-reanimated';
 
+//
 type LoadingOverlayProps = {
   visible: boolean;
   text?: string;
   style?: ViewStyle; // ✅ external layout control
 };
 
+//
 export const LoadingOverlay = ({ visible, text, style }: LoadingOverlayProps) => {
   if (!visible) return null;
 

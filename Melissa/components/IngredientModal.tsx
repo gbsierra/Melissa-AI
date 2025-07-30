@@ -10,6 +10,7 @@ import {
 import { useIngredientSuggestions } from '../hooks/useIngredientSuggestions';
 import type { Ingredient } from '../types/ingredients';
 
+//
 export type IngredientModalProps = {
   visible: boolean;
   onClose: () => void;
@@ -19,7 +20,7 @@ export type IngredientModalProps = {
   suggestions: string[];
 };
 
-
+//
 export default function IngredientModal({
   visible,
   onClose,
@@ -51,7 +52,7 @@ export default function IngredientModal({
             <ActivityIndicator size="small" color="#888" style={{ marginVertical: 8 }} />
           ) : (
             suggestions.map((alt, i) => (
-              <TouchableOpacity key={i} onPress={() => onSwap?.(ingredient.name, alt)}>
+              <TouchableOpacity key={i} onPress={() => { onSwap?.(ingredient.name, alt); onClose?.(); } }>
                 <Text style={styles.alt}>🔄 {alt}</Text>
               </TouchableOpacity>
             ))

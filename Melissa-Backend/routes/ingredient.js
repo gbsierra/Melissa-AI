@@ -4,6 +4,6 @@ const { getSuggestedIngredients, getSwapAmount } = require('../controllers/ingre
 
 router.get('/suggest/:ingredient', getSuggestedIngredients);
 
-router.post('/swap-amount', getSwapAmount);
+router.post('/suggest/swap-amount', getSwapAmount);
 
 module.exports = router;

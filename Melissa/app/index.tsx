@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
+  Button,
   TextInput,
   Text,
   Pressable,
@@ -27,23 +28,27 @@ import { MAX_PHOTOS } from '../constants/constants';
 
 import { SavedRecipesList } from '../components/SavedRecipesList';
 import { LoadingOverlay } from '../components/LoadingOverlay';
+import PremiumModal from '../components/PremiumModal';
 
 
 export default function HomeScreen() {
   const router = useRouter();
 
-  // Recipe Generation user inputs
+  // Recipe Generation user input states
   const [query, setQuery] = useState('');
   const [servings, setServings] = useState('');
   const [difficulty, setDifficulty] = useState('');
   const [cookware, setCookware] = useState('');
 
+  // user states
   const [loading, setLoading] = useState(false); // loading?
   const [retryCooldown, setRetryCooldown] = useState<number | null>(null); 
   const [quotaMessage, setQuotaMessage] = useState<string | null>(null); 
   const [micVisible, setMicVisible] = useState(false); // mic modal visable?
 
   const { savedRecipes, loadSavedRecipes, deleteRecipe } = useSavedRecipes();
+
+  const [premiumModalVisible, setPremiumModalVisible] = useState(false);
 
   // Load recipes from AsyncStorage on page enter
   useEffect(() => {
@@ -83,10 +88,25 @@ export default function HomeScreen() {
   const isDisabled = (!query && photoUris.length === 0) || loading || !!retryCooldown;
   const buttonStyle = [styles.button, isDisabled ? { opacity: 0.5 } : null];
 
+  const handlePurchase = async (productId: string) => {
+    try {
+      // You can add logging or entitlement refresh here
+    } catch (err) {
+      console.warn('Purchase failed:', err);
+      // Optionally track or alert user
+    }
+  };
+
+
  return (
   <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
     <SafeAreaView style={styles.safe}>
         <HelloWave />
+        <PremiumModal
+          isVisible={premiumModalVisible}
+          onClose={() => setPremiumModalVisible(false)}
+          onPurchase={handlePurchase}
+        />
 
         {/* Hero Section */}
         <View style={styles.hero}>
@@ -95,6 +115,7 @@ export default function HomeScreen() {
             style={styles.logo}
           />
           <Text style={styles.subtitle}>Your AI Kitchen Companion</Text>
+          <Button title="Upgrade to Premium" onPress={() => setPremiumModalVisible(true)} />
         </View>
 
         {/* Input Section */}
@@ -233,7 +254,7 @@ const styles = StyleSheet.create({
   safe: { 
     flex: 1, 
     paddingHorizontal: 16,
-    paddingVertical: -20,
+    paddingVertical: -30,
     backgroundColor: '#FFF9F5' 
   },
   container: { 
@@ -242,7 +263,7 @@ const styles = StyleSheet.create({
   },
   hero: {
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 5,
   },
   logo: {
     width: 250,

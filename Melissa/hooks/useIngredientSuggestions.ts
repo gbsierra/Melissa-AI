@@ -25,6 +25,7 @@ export const useIngredientSuggestions = (
       }
 
       try {
+        // fetch response from backend containing suggested ingredient 
         const response = await fetch(`http://10.0.0.23:3001/api/ingredient/suggest/${encodeURIComponent(ingredientName)}`);
 
         if (!response.ok) {

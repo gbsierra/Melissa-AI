@@ -40,9 +40,6 @@ function normalizeRecipe(raw, prompt = '', servings = '') {
 //
 async function generateRecipe(req, res) {
   const {
-    imageTags = [],
-    voiceText = '',
-    manualText = '',
     query = '',
     mode = '',
     servings = '',
@@ -50,12 +47,10 @@ async function generateRecipe(req, res) {
     cookware = ''
   } = req.body || {};
 
-  //console.log('\n[Melissa-Backend] 🔍 Incoming body:', req.body);
-  //console.log('[Melissa-Backend] 📂 Incoming files:', req.files);
   console.log(`\n[Melissa-Backend] 🍳 Mode selected: ${mode}`);
 
   if (!mode) {
-    return res.status(400).json({ error: 'Missing input mode (image-only, voice-only, fusion, or text-only)' });
+    return res.status(400).json({ error: 'Missing input mode (image-only, text-only, or fusion)' });
   }
 
   const prompt = formatPrompt(imageTags, voiceText || manualText || query || '', mode, servings, difficulty, cookware);
@@ -98,8 +93,7 @@ async function generateRecipe(req, res) {
     if (!rawRecipe) throw new Error('Gemini returned invalid recipe format');
 
     const recipe = normalizeRecipe(rawRecipe, prompt, servings);
-    //console.log('\n[Melissa-Backend] Recipe Output:', recipe);
-    console.log('\n[Melissa-Backend] Recipe Output Recieved!');
+    console.log('\n[Melissa-Backend] Recipe Output Received!');
     return res.json(recipe);
   } catch (err) {
     const errMsg = err?.message?.toLowerCase?.() || '';
@@ -144,17 +138,11 @@ async function adjustRecipe(req, res) {
 
   const files = req.files || []; // multiple uploaded photos
   const ingredientPhotos = files.map(file => file.buffer); // array of Buffers
-  
-  //console.log('\n[Melissa-Backend] Adjustment input:', {dishName,servings,ingredients,instructions});
   console.log('\n[Melissa-Backend] ✏️ Adjustment prompt:', adjustmentPrompt);
   console.log('[Melissa-Backend] 📷 Additional photos:', files.map(f => f.originalname).join(', '));
 
-  const parsedIngredients =
-  typeof ingredients === 'string' ? JSON.parse(ingredients) : ingredients;
-
-  const parsedInstructions =
-    typeof instructions === 'string' ? JSON.parse(instructions) : instructions;
-
+  const parsedIngredients = typeof ingredients === 'string' ? JSON.parse(ingredients) : ingredients;
+  const parsedInstructions = typeof instructions === 'string' ? JSON.parse(instructions) : instructions;
 
   const prompt = formatAdjustmentPrompt(dishName, servings, parsedIngredients, parsedInstructions, adjustmentPrompt, ingredientPhotos);
   console.log('[Melissa-Backend] 🧠 Formatted Prompt:\n', prompt);
@@ -165,7 +153,7 @@ async function adjustRecipe(req, res) {
         ...ingredientPhotos.map(buffer => ({
           inlineData: {
             data: buffer.toString('base64'),
-            mimeType: 'image/jpeg', // or detect per file
+            mimeType: 'image/jpeg',
           },
         })),
       ]
