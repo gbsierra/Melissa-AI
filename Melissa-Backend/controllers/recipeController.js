@@ -53,7 +53,7 @@ async function generateRecipe(req, res) {
     return res.status(400).json({ error: 'Missing input mode (image-only, text-only, or fusion)' });
   }
 
-  const prompt = formatPrompt(imageTags, voiceText || manualText || query || '', mode, servings, difficulty, cookware);
+  const prompt = formatPrompt(query || '', mode, servings, difficulty, cookware);
   console.log('[Melissa-Backend] 🧠 Formatted Prompt:\n', prompt);
 
   let input;

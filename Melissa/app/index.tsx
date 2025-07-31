@@ -29,6 +29,11 @@ import { MAX_PHOTOS } from '../constants/constants';
 import { SavedRecipesList } from '../components/SavedRecipesList';
 import { LoadingOverlay } from '../components/LoadingOverlay';
 import PremiumModal from '../components/PremiumModal';
+import LoginModal from '../components/LoginModal';
+import HeroActionsScroller from '../components/HeroActions';
+
+import CookbookGeneratorPage from './CookbookGenerator';
+
 
 
 export default function HomeScreen() {
@@ -49,6 +54,7 @@ export default function HomeScreen() {
   const { savedRecipes, loadSavedRecipes, deleteRecipe } = useSavedRecipes();
 
   const [premiumModalVisible, setPremiumModalVisible] = useState(false);
+  const [loginModalVisible, setLoginModalVisible] = useState(false);
 
   // Load recipes from AsyncStorage on page enter
   useEffect(() => {
@@ -107,15 +113,24 @@ export default function HomeScreen() {
           onClose={() => setPremiumModalVisible(false)}
           onPurchase={handlePurchase}
         />
+        <LoginModal isVisible={loginModalVisible} onClose={() => setLoginModalVisible(false)} />
+
 
         {/* Hero Section */}
         <View style={styles.hero}>
+
+          <HeroActionsScroller
+            onCreate={() => router.push('/CookbookGenerator')}
+            onLogin={() => setLoginModalVisible(true)}
+            onUpgrade={() => setPremiumModalVisible(true)}
+          />
+
           <Image
             source={require('../assets/images/icon.png')}
             style={styles.logo}
           />
           <Text style={styles.subtitle}>Your AI Kitchen Companion</Text>
-          <Button title="Upgrade to Premium" onPress={() => setPremiumModalVisible(true)} />
+
         </View>
 
         {/* Input Section */}
@@ -231,7 +246,7 @@ export default function HomeScreen() {
             Melissa is your AI-powered kitchen companion, blending on-device voice, text, and images to spark culinary creativity.
           </Text>
           <Text style={{ fontSize: 12, color: '#aaa', marginTop: 10 }}>
-            © {new Date().getFullYear()} Melissa App. All rights reserved.
+            © {new Date().getFullYear()} Melissa AI. All rights reserved.
           </Text>
         </View>
 
@@ -253,8 +268,8 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   safe: { 
     flex: 1, 
-    paddingHorizontal: 16,
-    paddingVertical: -30,
+    paddingHorizontal: 15,
+    paddingVertical: -65,
     backgroundColor: '#FFF9F5' 
   },
   container: { 
@@ -263,7 +278,7 @@ const styles = StyleSheet.create({
   },
   hero: {
     alignItems: 'center',
-    marginBottom: 5,
+    marginBottom: 10,
   },
   logo: {
     width: 250,

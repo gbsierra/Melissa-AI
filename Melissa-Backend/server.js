@@ -27,6 +27,9 @@ app.use('/api/transcribe', transcribeRoutes);
 const ingredientRoutes = require('./routes/ingredient');
 app.use('/api/ingredient', ingredientRoutes);
 
+const cookbookRoutes = require('./routes/cookbook');
+app.use('/api', cookbookRoutes);
+
 // Start server
 app.listen(PORT, () => {
   console.log(`[Melissa-Backend] 🚀 Server running at http://localhost:${PORT}`);

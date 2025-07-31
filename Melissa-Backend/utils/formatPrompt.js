@@ -103,4 +103,82 @@ function formatSubstitutionListPrompt(ingredient) {
   return `Task: Suggest three widely available substitutes for "${ingredient}". Return *only* the JSON. No markdown, no commentary, no explanation: { "substitutes": ["Alt1", "Alt2", "Alt3"] }`;
 }
 
-module.exports = { formatPrompt, formatAdjustmentPrompt, formatSubstitutionAmountPrompt, formatSubstitutionListPrompt };
+/**
+ * @param {Recipe[]} recipes - List of user-selected recipes
+ * @returns {string} - Prompt for generating a LaTeX cookbook
+ */
+function formatCookbookPrompt(recipes) {
+  const escapeLatex = (str = '') =>
+    String(str)
+      .replace(/([\\%&${}_^~])/g, '\\$1')
+      .replace(/#/g, '\\#')
+      .replace(/[{}]/g, '\\$&');
+
+  const recipeSummaries = recipes.map((r, i) => {
+    const ingredients = Array.isArray(r.ingredients)
+      ? r.ingredients
+          .map((group) =>
+            group?.group && Array.isArray(group.items)
+              ? `${escapeLatex(group.group)}: ${group.items.map(escapeLatex).join(', ')}`
+              : ''
+          )
+          .filter(Boolean)
+          .join(' | ')
+      : 'N/A';
+
+    const instructions = Array.isArray(r.instructions)
+      ? r.instructions.map(escapeLatex).join('. ')
+      : 'N/A';
+
+    return `Recipe ${i + 1}:
+Title: ${escapeLatex(r.dishName)}
+Ingredients: ${ingredients}
+Instructions: ${instructions}`;
+  }).join('\n\n');
+
+  return `Generate a LaTeX document for a cookbook using \\documentclass{book} that compiles with pdflatex. Use only standard packages: geometry, titlesec, tocloft, enumitem, hyperref, xcolor[rgb], tcolorbox[most], fancyhdr, lmodern.
+
+Requirements:
+- Title page: "My Family Cookbook", subtitle "Timeless Recipes", author "Your Name", date "July 2025", text cover description (e.g., "Rustic table with recipe cards").
+- Foreword: 100 words.
+- Table of contents.
+- Recipes in chapters (e.g., Breakfast, Dinner) with 1-sentence italic intros.
+- Recipes in \\newtcolorbox{recipebox}[1]{breakable,colback=beige,colframe=brown,coltitle=white,title={#1},boxsep=5pt}.
+- Ingredients in \\begin{itemize}, instructions in \\begin{enumerate}.
+- Headers: \\fancyhead[LE]{My Family Cookbook}, \\fancyhead[RO]{\\leftmark}.
+- Footer: \\fancyfoot[C]{\\thepage}.
+- Add \\setlist[itemize]{noitemsep,topsep=0pt} and \\setlist[enumerate]{noitemsep,topsep=0pt}.
+- Use only standard LaTeX commands, no external packages or images.
+- Return only the LaTeX source.
+
+Recipes:
+${recipeSummaries}`;
+}
+
+/**
+ * @param {string} latex - Raw LaTeX source to validate
+ * @returns {string} - Prompt to fix LaTeX errors
+ */
+function formatLatexValidationPrompt(latex) {
+  return `Fix this LaTeX document to compile with pdflatex using only standard packages: geometry, titlesec, tocloft, enumitem, hyperref, xcolor[rgb], tcolorbox[most], fancyhdr, lmodern.
+
+Rules:
+- Fix typos: \\fancyhe or \\cfoot to \\fancyhead or \\fancyfoot[C], \\newtcbenvironment to \\newtcolorbox.
+- Use \\usepackage[most]{tcolorbox} for breakable option.
+- Ensure tcolorbox uses coltitle for title color.
+- Remove non-standard packages (e.g., fontenc).
+- Add \\setlist[itemize]{noitemsep,topsep=0pt} and \\setlist[enumerate]{noitemsep,topsep=0pt} if missing.
+- Fix mismatched \\begin{}/\\end{}.
+- Keep document structure.
+- Return only the fixed LaTeX source.
+
+LaTeX source:
+${latex}`;
+}
+
+
+
+
+
+
+export { formatPrompt, formatAdjustmentPrompt, formatSubstitutionAmountPrompt, formatSubstitutionListPrompt, formatCookbookPrompt, formatLatexValidationPrompt };

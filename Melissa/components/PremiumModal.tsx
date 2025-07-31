@@ -23,6 +23,8 @@ const tiers: Tier[] = [
     name: 'Pro',
     price: '$4.99 / month',
     features: [
+      'Microphone access',
+      'Ability to specify servings, difficulty, cookware',
       'Upload up to 2 images per request',
       'Adjust & Save recipes',
       'Up to 5 suggested ingredient substitutes',
